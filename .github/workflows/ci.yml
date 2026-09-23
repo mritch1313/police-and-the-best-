@@ -23,6 +23,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The jobs publish their reports into ci-reports/ with [skip ci], which needs write access.
+permissions:
+  contents: write
+
 env:
   GODOT_VERSION: "4.7.2"
   APK_PATH: build/android/PoliceChase.apk
@@ -106,13 +110,18 @@ jobs:
 
       - name: Import the project (builds the .godot cache)
         run: |
-          set -euo pipefail
+          set -uo pipefail
           godot --headless --path . --import 2>&1 | tee /tmp/import.log
-          if grep -qE "ERROR|SCRIPT ERROR" /tmp/import.log; then
-            echo "::error title=Import errors::the project reported errors while importing"
-            grep -nE "ERROR|SCRIPT ERROR" /tmp/import.log | head -40
+          mapfile -t broken < <(grep -nE "ERROR|SCRIPT ERROR|Parse Error|Failed to load" /tmp/import.log | head -12)
+          if [ "${#broken[@]}" -gt 0 ]; then
+            # Raw job logs are unreadable from some environments, but check-run annotations
+            # are not: every problem is mirrored into an annotation.
+            for line in "${broken[@]}"; do
+              echo "::error title=Import problem::${line}"
+            done
             exit 1
           fi
+          echo "import clean"
 
       - name: Verify the project boots (main scene)
         run: |

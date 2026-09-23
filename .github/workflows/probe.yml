@@ -1,11 +1,9 @@
 name: Environment Probe
 
+# Manual only: the regular pipeline lives in ci.yml (validate -> test -> Android APK).
+# This probe is kept as the diagnostic tool for "what can a fresh runner actually do".
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "arena/**"
-      - "ci/**"
 
 permissions:
   contents: write
