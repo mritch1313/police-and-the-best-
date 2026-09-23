@@ -1,0 +1,33 @@
+# Осознанные исключения проверки API. Формат: Class.member (или Class.*), после # — причина.
+#
+# Всё ниже — ложные срабатывания эвристики «тип переменной = класс Godot» в
+# tools/api_check.py --dump (локальные переменные объявлены как Dictionary/Variant,
+# а по факту в них лежат Array/String/Vector3). имена методов при этом ПРОВЕРЕНЫ вручную по doc/classes/{Dictionary,Array,String,Vector3}.xml этого же дерева исходников.
+Dictionary.append        # фактически Array.append на значении словаря
+Dictionary.name          # фактически имя поля из собственного класса конфига
+Dictionary.usage         # фактически PROPERTY_USAGE_* из get_property_list()
+Variant.*                # Variant — общий тип значений из .cfg; члены проверяются по факту вызова
+
+# Узлы передаются в коде как Node (мягкая типизация: `chase: Node`, `player: Node`).
+# Члены при этом существуют — они объявлены в OWN-классах проекта (ChaseManager,
+# PlayerCar, WorldStreamer, Hud, ...), а OWN-классы api_check намеренно не проверяет:
+# их проверяют gdparse и автотесты (вызов через has_method там, где он реально возможен).
+Node.units
+Node.wanted_changed
+Node.wanted_int
+Node.ground_speed_kmh
+Node.heading_rad
+Node.nitro
+Node.set_controls
+Node.status_line
+Node.status_text
+Node.travelled_m_reset
+Node.is_chunk_built
+Node.progress
+# Rect2.x/.y — эвристика приняла элементы PackedVector2Array (Vector2) за Rect2: в коде
+# это `seg.x`, `mid.x`, где seg/mid — Vector2 из split_interval()/вычислений.
+Rect2.x
+Rect2.y
+Node.global_position       # узел типизирован как Node, член реально у Node3D/Node2D
+Dictionary.distance_to     # в словаре лежит Vector2/Vector3 (plan_route, footprint)
+Dictionary.length          # то же самое: значение - Vector2

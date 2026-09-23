@@ -1,0 +1,24 @@
+# Godot
+.godot/
+*.import
+.import/
+
+# Android export output
+build/
+android/build/
+*.apk
+*.aab
+*.keystore
+
+# Editor / OS
+*.tmp
+~$\*
+.DS_Store
+Thumbs.db
+
+# CI scratch
+.cgodot-cache/
+
+# Python tooling
+__pycache__/
+*.pyc
