@@ -5,7 +5,11 @@ on:
   push:
     branches:
       - "arena/**"
+      - "ci/**"
 
+# GitHub's raw job logs are not readable from every environment, so every step of this
+# probe writes its findings into $GITHUB_STEP_SUMMARY as well. The summary is exposed
+# through the check-run API and therefore stays readable everywhere.
 jobs:
   probe:
     name: Runner capability probe (ubuntu-latest)
@@ -17,20 +21,25 @@ jobs:
       - name: Runner facts
         run: |
           set -x
-          uname -a
-          nproc
-          free -h
-          df -h /
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          {
+            echo "## Runner facts"
+            echo '```'
+            uname -a
+            echo "nproc: $(nproc)"
+            free -h
+            df -h /
+            echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+            echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset}"
+            echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME:-unset}"
+            java -version 2>&1
+            echo "JAVA_HOME=${JAVA_HOME:-unset}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
           ls -la /usr/local/lib/android/sdk 2>/dev/null || echo "no sdk at /usr/local/lib/android/sdk"
           ls -la /usr/local/lib/android/sdk/build-tools 2>/dev/null || true
           ls -la /usr/local/lib/android/sdk/platforms 2>/dev/null || true
-          java -version 2>&1 || true
           ls -la /usr/lib/jvm 2>/dev/null || true
           which sdkmanager adb apksigner zipalign gradle xvfb-run 2>&1 || true
-          glxinfo -B 2>&1 | head -20 || echo "no glxinfo"
 
       - name: Setup Godot
         uses: ./.github/actions/setup-godot
@@ -41,31 +50,58 @@ jobs:
       - name: Godot version + import pass
         run: |
           set -x
-          godot --version
-          ls -la "$HOME/.local/share/godot/export_templates/4.7.2.stable" | head -20
-          godot --headless --import --path . 2>&1 | tail -40
-          echo "--- .godot dir ---"
-          ls -la .godot 2>/dev/null | head
+          godot --version 2>&1 | tee /tmp/godot_version.txt
+          ls -la "$HOME/.local/share/godot/export_templates/4.7.2.stable" 2>&1 | head -20 | tee /tmp/templates_ls.txt
+          godot --headless --import --path . > /tmp/import.log 2>&1 || true
+          tail -30 /tmp/import.log
+          {
+            echo "## Godot"
+            echo '```'
+            cat /tmp/godot_version.txt
+            echo "--- templates ---"
+            cat /tmp/templates_ls.txt
+            echo "--- import tail ---"
+            tail -30 /tmp/import.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run main scene headless (probe)
         run: |
           set -x
-          timeout 120 godot --headless --path . --quit-after 300 2>&1 | tee /tmp/probe_run.log
-          echo "--- grep PROBE ---"
-          grep "\[PROBE\]" /tmp/probe_run.log || true
+          timeout 180 godot --headless --path . --quit-after 600 > /tmp/probe_run.log 2>&1 || echo "run exit=$?"
+          tail -40 /tmp/probe_run.log
+          {
+            echo "## Headless run"
+            echo '```'
+            grep -a "PROBE" /tmp/probe_run.log || echo "(no PROBE lines)"
+            echo "--- full tail ---"
+            tail -25 /tmp/probe_run.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Xvfb + software OpenGL render probe
         run: |
           set -x
           sudo apt-get update -qq || true
           sudo apt-get install -y -qq xvfb mesa-utils libgl1-mesa-dri || true
-          xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver opengl3 --path . --quit-after 300 2>&1 | tail -40 || echo "xvfb run failed"
+          xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver opengl3 --path . --quit-after 600 > /tmp/xvfb.log 2>&1 || echo "xvfb exit=$?"
+          tail -40 /tmp/xvfb.log
+          {
+            echo "## Xvfb render probe"
+            echo '```'
+            grep -a "PROBE" /tmp/xvfb.log || echo "(no PROBE lines)"
+            echo "--- tail ---"
+            tail -25 /tmp/xvfb.log
+            echo "--- glxinfo ---"
+            xvfb-run -a glxinfo -B 2>&1 | head -12 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Editor settings + android export probe
         run: |
           set -x
-          mkdir -p "$HOME/.config/godot" "$HOME/.android"
-          timeout 180 godot --headless --editor --quit --path . 2>&1 | tail -20 || true
+          mkdir -p "$HOME/.config/godot" "$HOME/.android" build/android
+          timeout 240 godot --headless --editor --quit --path . > /tmp/editor.log 2>&1 || true
           ls -la "$HOME/.config/godot" || true
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           JDK="$(dirname "$(dirname "$(readlink -f "$(which javac)")")")"
@@ -85,15 +121,36 @@ jobs:
             echo "export/android/debug_keystore_pass = \"android\""
             echo "export/android/force_system_user = false"
           } >> "$SETTINGS"
-          tail -20 "$SETTINGS"
-          mkdir -p build/android
-          timeout 900 godot --headless --export-release "Android" "build/android/probe.apk" --path . 2>&1 | tail -80 || echo "EXPORT FAILED"
+          export ANDROID_HOME="$SDK"
+          export JAVA_HOME="$JDK"
+          set +e
+          timeout 1200 godot --headless --export-release "Android" "build/android/probe.apk" --path . > /tmp/export.log 2>&1
+          EXPORT_EXIT=$?
+          set -e
+          echo "EXPORT EXIT=$EXPORT_EXIT"
+          tail -60 /tmp/export.log
           ls -la build/android || true
+          {
+            echo "## Android export probe"
+            echo "export exit code: \`$EXPORT_EXIT\`"
+            echo "SDK: \`$SDK\`  JDK: \`$JDK\`"
+            echo '```'
+            echo "--- export log tail ---"
+            tail -60 /tmp/export.log
+            echo "--- build/android ---"
+            ls -la build/android || echo "(no build/android)"
+            echo "--- editor settings ---"
+            cat "$SETTINGS" | tail -20
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$EXPORT_EXIT" -ne 0 ]; then
+            echo "::error title=Android export failed::godot --export-release returned $EXPORT_EXIT"
+          fi
 
-      - name: Always dump logs
+      - name: Upload probe apk (if any)
         if: always()
-        run: |
-          echo "=== ~/.config/godot ==="
-          ls -la "$HOME/.config/godot" 2>/dev/null || true
-          echo "=== build/android ==="
-          ls -la build/android 2>/dev/null || true
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-apk
+          path: build/android/*.apk
+          if-no-files-found: warn
