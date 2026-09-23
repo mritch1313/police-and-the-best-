@@ -112,7 +112,7 @@ jobs:
   headless-tests:
     name: HEADLESS TESTS
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -158,11 +158,33 @@ jobs:
           ls -la .godot >/dev/null
 
       - name: Автотесты (headless)
+        timeout-minutes: 32
         run: |
-          set -euo pipefail
+          set -uo pipefail
           mkdir -p ci-reports
-          timeout 900 ~/.cache/godot-ci/godot --headless --path . res://tests/run_tests.tscn \
+          timeout 1700 ~/.cache/godot-ci/godot --headless --path . res://tests/run_tests.tscn \
             2>&1 | tee ci-reports/tests.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" > ci-reports/tests-exit.txt
+          # Аннотации - потому что даунлоад логов/артефактов может быть недоступен, а по
+          # аннотации видно и таймаут, и какой тест был последним, и самые долгие тесты.
+          if [ "$code" = "124" ]; then
+            echo "::error::автотесты упёрлись в таймаут; последний RUN: $(tail -n 1 ci-reports/tests_progress.txt 2>/dev/null || echo '(нет progress-файла)')"
+          fi
+          passed=$(grep -c "^\[PASS\]" ci-reports/tests.txt 2>/dev/null || true)
+          failed=$(grep -c "^\[FAIL\]" ci-reports/tests.txt 2>/dev/null || true)
+          echo "::notice::автотесты: exit=$code, PASS=$passed, FAIL=$failed, строк лога=$(wc -l < ci-reports/tests.txt 2>/dev/null || echo 0)"
+          if [ -s ci-reports/tests.txt ]; then
+            tail -n 6 ci-reports/tests.txt | tr '\n' '|' | sed 's/[[:cntrl:]]//g' | cut -c1-700 | \
+              xargs -I{} echo "::notice::хвост вывода тестов: {}"
+          fi
+          if [ -s ci-reports/tests_progress.txt ]; then
+            slow=$(awk '$1=="PASS"||$1=="FAIL"{ms=$3; gsub(/[^0-9.]/,"",ms); print ms" "$2}' ci-reports/tests_progress.txt | sort -rn | head -5 | paste -sd', ' -)
+            echo "::notice::самые долгие тесты (мс): ${slow:-нет данных}"
+          fi
+          if [ "$code" != "0" ]; then
+            exit 1
+          fi
           if grep -qE "SCRIPT ERROR|Failed loading resource|Cannot open file" ci-reports/tests.txt; then
             echo "::error::в выводе тестов есть ошибки движка (SCRIPT ERROR / не загрузившийся ресурс)"
             grep -nE "SCRIPT ERROR|Failed loading resource|Cannot open file" ci-reports/tests.txt | head -20

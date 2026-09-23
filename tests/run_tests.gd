@@ -29,8 +29,29 @@ var _results: Array[Dictionary] = []
 var _failed: int = 0
 
 
+## Живой прогресс: файл дописывается ПЕРЕД каждым тестом. Нужен он вот для чего: если
+## прогон упирается в timeout CI, по последним строкам видно, какой тест завис (в CI-логе
+## этого иначе не увидеть).
+const PROGRESS_PATH := "res://ci-reports/tests_progress.txt"
+
+func _progress(line: String) -> void:
+	var dir_path := "res://ci-reports"
+	if not DirAccess.dir_exists_absolute(dir_path):
+		DirAccess.make_dir_recursive_absolute(dir_path)
+	var file := FileAccess.open(PROGRESS_PATH, FileAccess.READ_WRITE)
+	if file == null:
+		file = FileAccess.open(PROGRESS_PATH, FileAccess.WRITE)
+		if file == null:
+			return
+	file.seek_end()
+	file.store_line(line)
+	file.flush()
+	file.close()
+
+
 func _ready() -> void:
 	print("=== POLICE CHASE: АВТОТЕСТЫ (Godot %s) ===" % Engine.get_version_info().get("string", "?"))
+	_progress("BEGIN godot=%s tests=%d" % [Engine.get_version_info().get("string", "?"), 39])
 	var started := Time.get_ticks_msec()
 	_run("configs_loaded", _test_configs_loaded)
 	_run("config_clamps_out_of_range", _test_config_clamps)
@@ -76,6 +97,7 @@ func _ready() -> void:
 
 
 func _run(name: String, callback: Callable) -> void:
+	_progress("RUN " + name)
 	var started := Time.get_ticks_usec()
 	var problems: PackedStringArray = callback.call()
 	var took := float(Time.get_ticks_usec() - started) / 1000.0
@@ -87,6 +109,7 @@ func _run(name: String, callback: Callable) -> void:
 	print("[%s] %-44s %6.1f мс" % ["PASS" if ok else "FAIL", name, took])
 	for problem in problems:
 		print("        -> ", problem)
+	_progress("%s %s %.0fms" % ["PASS" if ok else "FAIL", name, took])
 
 
 func _report(elapsed: float) -> void:
@@ -100,6 +123,7 @@ func _report(elapsed: float) -> void:
 		])
 	lines.append("итого: %d из %d пройдено (%.0f мс)" % [_results.size() - _failed, _results.size(), elapsed])
 	var text := "\n".join(lines) + "\n"
+	_progress("DONE failed=%d elapsed=%.0fms" % [_failed, elapsed])
 	print(text)
 	var dir_path := "res://ci-reports"
 	if not DirAccess.dir_exists_absolute(dir_path):

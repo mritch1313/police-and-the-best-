@@ -315,7 +315,11 @@ static func _perimeter_buildings(
 		var cross_hi := inner.end.y if along_x else inner.end.x
 		var max_depth := maxf((cross_hi - cross_lo) * 0.55, 10.0)
 		var cursor := lo
-		while cursor < hi - 8.0:
+		# Жёсткий потолок итераций: генератор мира не имеет права зависнуть даже на
+		# вырожденном конфиге (нулевой шаг, кривой pitch) - игра должна открыться.
+		var guard := 0
+		while cursor < hi - 8.0 and guard < 512:
+			guard += 1
 			if rng.randf() > density:
 				cursor += rng.randf_range(5.0, 12.0)
 				continue
@@ -571,7 +575,9 @@ static func _add_street_furniture(chunk: Vector2i, origin: Vector2, size: float,
 		for side in [-1.0, 1.0]:
 			var lateral := line_offset(i, cfg) + side * (half + cfg.sidewalk_width_m * 0.6)
 			var t := -fmod(lateral, step * 0.25)
-			while t < size + step * 0.25:
+			var guard := 0
+			while t < size + step * 0.25 and guard < 4096:
+				guard += 1
 				if placed_lamps < lamps:
 					var p := Vector2(t, lateral)
 					props.append({
@@ -591,7 +597,9 @@ static func _add_street_furniture(chunk: Vector2i, origin: Vector2, size: float,
 		for side in [-1.0, 1.0]:
 			var lateral := line_offset(i, cfg) + side * (half + cfg.sidewalk_width_m * 0.6)
 			var t := -fmod(lateral, step * 0.5)
-			while t < size + step * 0.5:
+			var guard := 0
+			while t < size + step * 0.5 and guard < 4096:
+				guard += 1
 				if placed_lamps < lamps:
 					props.append({
 						"type": "lamp", "pos": Vector3(lateral, 0.0, t),
