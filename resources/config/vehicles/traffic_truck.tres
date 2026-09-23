@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="VehicleConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/config/vehicle_config.gd" id="1_veh"]
+
+[resource]
+script = ExtResource("1_veh")
+mass = 6800.0
+center_of_mass_height = 1.02
+body_size = Vector3(2.36, 2.22, 7.7)
+front_weight_ratio = 0.42
+engine_torque = 1400.0
+peak_torque_rpm = 2000.0
+max_rpm = 3600.0
+final_drive = 4.2
+drive_layout = 0
+wheel_radius = 0.48
+gear_count = 6
+first_gear_ratio = 3.8
+top_gear_ratio = 0.7
+max_speed = 19.0
+drag_coefficient = 0.9
+brake_torque = 9000.0
+tyre_grip = 1.0
+max_steer_angle_deg = 27.0
+suspension_rest_length = 0.34
+suspension_travel = 0.26
+suspension_stiffness = 90000.0
+suspension_damping = 7000.0
+anti_roll = 0.6
+wheel_width = 0.3

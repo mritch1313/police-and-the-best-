@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="CameraConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/config/camera_config.gd" id="1_cam"]
+
+[resource]
+script = ExtResource("1_cam")
+distance = 7.4
+height = 2.55
+height_at_top = 1.6
+pitch_deg = -12.5
+min_pitch_deg = -62.0
+max_pitch_deg = 22.0
+fov = 68.0
+fov_speed_bonus = 10.0
+fov_speed_reference = 46.0
+position_smoothing = 0.11
+rotation_smoothing = 0.06
+auto_recenter_delay = 1.6
+auto_recenter_speed = 0.55
+recenter_when_reversing = false
+collision_enabled = true
+collision_radius = 0.42
+collision_margin = 0.35
+min_collision_distance = 1.6
+distance_recovery_speed = 6.5
+shake_amplitude = 0.35
+shake_decay = 0.45
+shake_speed_threshold = 6.0
+touch_sensitivity = 0.0038
+mouse_sensitivity = 0.0042
+stick_look_speed = 2.6
+invert_y = false

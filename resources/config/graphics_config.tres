@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="GraphicsConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/config/graphics_config.gd" id="1_gfx"]
+
+[resource]
+script = ExtResource("1_gfx")
+preset = 1
+medium_lod_bias = 1.0
+medium_prop_density = 0.85
+medium_shadow_quality = 1
+medium_shadow_distance = 58.0
+low_lod_bias = 0.62
+low_prop_density = 0.45
+low_shadow_quality = 0
+low_shadow_distance = 34.0
+high_lod_bias = 1.35
+high_prop_density = 1.0
+high_shadow_quality = 2
+high_shadow_distance = 92.0
+shadow_atlas_size_low = 1024
+shadow_atlas_size_medium = 2048
+shadow_atlas_size_high = 4096
+shadows_enabled = true
+contact_shadows = true
+anisotropic_level = 1
+nearest_mipmap_filter = false
+max_texture_size = 512
+use_vertex_colour_variation = true
+glow_enabled = false
+glow_intensity = 0.55
+screen_space_aa = false
+msaa_3d = 0
+fxaa = true
+fog_density = 0.0022
+sky_energy = 1.0
+ambient_energy = 0.72
+shadow_opacity = 0.62
+time_of_day = 10.5
+max_resident_chunks_medium = 160
+max_resident_chunks_low = 96
+max_resident_chunks_high = 220
+traffic_cars_low = 6
+traffic_cars_medium = 14
+traffic_cars_high = 20

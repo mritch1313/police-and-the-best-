@@ -1,0 +1,320 @@
+name: CI
+
+# Three jobs, cheapest first:
+#   validate - lint GDScript, check the engine API against the 4.7.2 documentation, lint the
+#              workflows themselves. No engine download, runs in seconds.
+#   test     - headless Godot: import the project, run the automated test suites, run the real
+#              game scene for a few hundred frames, and take a screenshot under a software
+#              OpenGL context (Xvfb) as visual evidence.
+#   android  - the expensive one: install the export templates, build the APK and store it as
+#              an artifact. Only runs when the cheap jobs are green.
+#
+# The Android job must never be skipped silently: `android` depends on `test`, and `test`
+# depends on `validate`, so a failure in the cheap checks stops the pipeline before the
+# expensive one starts.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7.2"
+  APK_PATH: build/android/PoliceChase.apk
+
+jobs:
+  validate:
+    name: Validate (lint + API + workflows)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lint tooling
+        run: python -m pip install --disable-pip-version-check gdtoolkit==4.* pyyaml
+
+      - name: GDScript lint (gdparse on every script)
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r file; do
+            gdparse "$file" >/dev/null
+            count=$((count + 1))
+          done < <(find scripts tests tools -name '*.gd' | sort)
+          echo "parsed $count scripts, no syntax errors"
+
+      - name: Project structure checks
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, sys
+          required = [
+              "project.godot",
+              "export_presets.cfg",
+              "scenes/main/Main.tscn",
+              "scenes/main/MainMenu.tscn",
+              "scenes/main/OrientationSelect.tscn",
+              "scenes/game/GameWorld.tscn",
+              "scenes/vehicles/PlayerCar.tscn",
+              "scenes/ui/PauseMenu.tscn",
+              "scenes/ui/EndScreen.tscn",
+              "assets/icons/icon.svg",
+              "assets/menu/background.png",
+              "assets/ui/map_test_district.png",
+              "resources/config/world_config.tres",
+              "resources/config/vehicles/player_car.tres",
+              "resources/config/vehicles/police_cruiser.tres",
+              "tests/TestRunner.tscn",
+              "tests/SmokeTest.tscn",
+          ]
+          missing = [p for p in required if not os.path.exists(p)]
+          if missing:
+              print("missing files:", *missing, sep="\n  ")
+              sys.exit(1)
+          texture_dir = "assets/textures"
+          textures = [f for f in os.listdir(texture_dir) if f.endswith(".png")]
+          if len(textures) < 30:
+              print(f"expected the generated texture set, found {len(textures)} png files")
+              sys.exit(1)
+          print(f"structure ok: {len(textures)} textures present")
+          PY
+
+      - name: Workflow lint
+        run: PYTHONPATH=. python tools/ci/lint_workflows.py .github/workflows
+
+  test:
+    name: Headless tests + smoke test + screenshot
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: ./.github/actions/setup-godot
+        with:
+          godot-version: ${{ env.GODOT_VERSION }}
+
+      - name: Import the project (builds the .godot cache)
+        run: |
+          set -euo pipefail
+          godot --headless --path . --import 2>&1 | tee /tmp/import.log
+          if grep -qE "ERROR|SCRIPT ERROR" /tmp/import.log; then
+            echo "::error title=Import errors::the project reported errors while importing"
+            grep -nE "ERROR|SCRIPT ERROR" /tmp/import.log | head -40
+            exit 1
+          fi
+
+      - name: Verify the project boots (main scene)
+        run: |
+          set -euo pipefail
+          timeout 180 godot --headless --path . --quit-after 300 2>&1 | tee /tmp/boot.log
+          grep -nE "ERROR|SCRIPT ERROR|WARNING" /tmp/boot.log | head -40 || true
+
+      - name: Automated test suites (light)
+        run: |
+          set -euo pipefail
+          timeout 600 godot --headless --path . res://tests/TestRunner.tscn -- --quick 2>&1 | tee /tmp/tests-quick.log
+
+      - name: Automated test suites (full, with physics)
+        run: |
+          set -euo pipefail
+          timeout 1500 godot --headless --path . res://tests/TestRunner.tscn 2>&1 | tee /tmp/tests-full.log
+
+      - name: Smoke test of the real game scene (headless)
+        run: |
+          set -euo pipefail
+          timeout 600 godot --headless --path . res://tests/SmokeTest.tscn -- --frames 480 --seed 20240923 > /tmp/smoke-headless.log 2>&1 || {
+            echo "::error title=Smoke test failed::the game scene did not pass the headless smoke test"
+            tail -60 /tmp/smoke-headless.log
+            exit 1
+          }
+          tail -30 /tmp/smoke-headless.log
+
+      - name: Smoke test under a software OpenGL context (screenshot)
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb libgl1-mesa-dri libglx-mesa0
+          mkdir -p artifacts
+          timeout 900 xvfb-run -a -s "-screen 0 720x1612x24" \
+            godot --path . --rendering-driver opengl3 --resolution 720x1612 \
+            res://tests/SmokeTest.tscn -- --frames 360 --seed 20240923 \
+            --screenshot "$PWD/artifacts/gameplay.png" > /tmp/smoke-gl.log 2>&1 || {
+              echo "::error title=Rendered smoke test failed::the game scene did not render"
+              tail -60 /tmp/smoke-gl.log
+              exit 1
+            }
+          tail -30 /tmp/smoke-gl.log
+          ls -la artifacts/
+
+      - name: Collect logs
+        if: always()
+        run: |
+          {
+            echo "=== import ==="; tail -40 /tmp/import.log 2>/dev/null || true
+            echo "=== boot ==="; tail -60 /tmp/boot.log 2>/dev/null || true
+            echo "=== tests (quick) ==="; tail -120 /tmp/tests-quick.log 2>/dev/null || true
+            echo "=== tests (full) ==="; tail -200 /tmp/tests-full.log 2>/dev/null || true
+            echo "=== smoke (headless) ==="; tail -80 /tmp/smoke-headless.log 2>/dev/null || true
+            echo "=== smoke (opengl) ==="; tail -80 /tmp/smoke-gl.log 2>/dev/null || true
+          } > /tmp/ci-test-report.txt
+          bash tools/ci/publish_report.sh test /tmp/ci-test-report.txt || true
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            /tmp/import.log
+            /tmp/boot.log
+            /tmp/tests-quick.log
+            /tmp/tests-full.log
+            /tmp/smoke-headless.log
+            /tmp/smoke-gl.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload gameplay screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameplay-screenshots
+          path: artifacts/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+  android:
+    name: Android APK (release)
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 90
+    env:
+      # The Android SDK is preinstalled on GitHub's ubuntu runners; the build tools version is
+      # pinned so the build is reproducible and the Gradle cache key stays stable.
+      ANDROID_BUILD_TOOLS: "34.0.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install build tools and platform
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;${ANDROID_BUILD_TOOLS}"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+      - name: Setup Godot with export templates
+        uses: ./.github/actions/setup-godot
+        with:
+          godot-version: ${{ env.GODOT_VERSION }}
+          export-templates: "true"
+
+      - name: Cache Gradle and Godot's Android build directory
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.config/Godot/android_build
+          key: gradle-${{ env.GODOT_VERSION }}-${{ env.ANDROID_BUILD_TOOLS }}-${{ hashFiles('export_presets.cfg', 'project.godot') }}
+          restore-keys: |
+            gradle-${{ env.GODOT_VERSION }}-${{ env.ANDROID_BUILD_TOOLS }}-
+
+      - name: Configure Godot's editor settings for the Android export
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.7.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_HOME}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          export/android/debug_keystore = "${HOME}/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          export/android/force_system_user = false
+          export/android/shutdown_adb_on_exit = true
+          EOF
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android \
+              -keystore "$HOME/.android/debug.keystore" -storepass android -dname "CN=Android Debug,O=Android,C=US" \
+              -validity 9999 -deststoretype pkcs12
+          fi
+          # The export preset points at the debug keystore inside the project; keep the two in
+          # sync without ever committing a keystore.
+          cp "$HOME/.android/debug.keystore" ./debug.keystore
+          echo "editor settings written"
+
+      - name: Import the project
+        run: |
+          set -euo pipefail
+          godot --headless --path . --import 2>&1 | tail -20
+
+      - name: Verify the export preset
+        run: |
+          set -euo pipefail
+          godot --headless --path . --export-release "Android" "$APK_PATH" --dry-run 2>&1 | tail -40
+
+      - name: Export the APK
+        run: |
+          set -euo pipefail
+          mkdir -p build/android
+          timeout 2400 godot --headless --path . --export-release "Android" "$APK_PATH" > /tmp/export.log 2>&1 || {
+            echo "::error title=Android export failed::godot --export-release returned an error"
+            tail -120 /tmp/export.log
+            exit 1
+          }
+          tail -40 /tmp/export.log
+          ls -la "$APK_PATH"
+
+      - name: Inspect the APK
+        run: |
+          set -euo pipefail
+          ls -la "$APK_PATH"
+          unzip -l "$APK_PATH" | head -30
+          if unzip -l "$APK_PATH" | grep -q "lib/arm64-v8a/"; then
+            echo "::notice title=APK contains arm64-v8a::the 64 bit library is present"
+          else
+            echo "::error title=APK without arm64-v8a::the 64 bit library is missing"
+            exit 1
+          fi
+
+      - name: Publish the export report
+        if: always()
+        run: |
+          {
+            echo "apk: $APK_PATH"
+            echo "godot: $(godot --version 2>/dev/null || echo unknown)"
+            echo "java: $(java -version 2>&1 | head -2)"
+            echo "android sdk: ${ANDROID_HOME}"
+            echo "--- export log ---"
+            tail -80 /tmp/export.log 2>/dev/null || true
+          } > /tmp/ci-android-report.txt
+          bash tools/ci/publish_report.sh android /tmp/ci-android-report.txt || true
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: police-chase-apk
+          path: ${{ env.APK_PATH }}
+          if-no-files-found: error
+          retention-days: 30

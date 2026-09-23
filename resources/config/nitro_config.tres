@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="NitroConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/config/nitro_config.gd" id="1_nitro"]
+
+[resource]
+script = ExtResource("1_nitro")
+torque_multiplier = 1.85
+drag_multiplier = 0.42
+boosted_max_speed = 58.0
+downforce_bonus = 8.0
+capacity_seconds = 4.0
+recharge_seconds_per_second = 0.42
+recharge_delay = 1.1
+minimum_to_start = 0.35
+empty_cooldown = 0.8
+camera_fov_bonus = 9.0
+flame_scale = 1.0

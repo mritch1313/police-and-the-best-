@@ -1,0 +1,20 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/vehicles/player_car.gd" id="1_player"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(1.92, 0.68, 4.32)
+
+[node name="PlayerCar" type="RigidBody3D"]
+collision_layer = 8
+collision_mask = 455
+mass = 1450.0
+continuous_cd = true
+contact_monitor = true
+max_contacts_reported = 6
+can_sleep = false
+script = ExtResource("1_player")
+
+[node name="Body" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.07, 0)
+shape = SubResource("BoxShape3D_body")

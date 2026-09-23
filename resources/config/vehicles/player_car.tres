@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="VehicleConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/config/vehicle_config.gd" id="1_veh"]
+[ext_resource type="Resource" path="res://resources/config/nitro_config.tres" id="2_nitro"]
+
+[resource]
+script = ExtResource("1_veh")
+mass = 1450.0
+center_of_mass_height = 0.52
+body_size = Vector3(1.86, 0.72, 4.45)
+front_weight_ratio = 0.53
+engine_torque = 640.0
+peak_torque_rpm = 4200.0
+max_rpm = 6800.0
+idle_rpm = 800.0
+final_drive = 3.6
+drive_layout = 0
+awd_front_split = 0.42
+rpm_response = 9.0
+wheel_radius = 0.34
+reverse_torque_scale = 0.55
+reverse_speed_ratio = 0.28
+gear_count = 5
+first_gear_ratio = 3.2
+top_gear_ratio = 0.78
+shift_up_fraction = 0.86
+shift_down_fraction = 0.42
+shift_time = 0.28
+wheel_inertia = 1.7
+peak_slip_ratio = 0.13
+slide_slip_ratio = 0.62
+engine_braking_torque = 55.0
+drivetrain_efficiency = 0.9
+max_speed = 46.0
+drag_coefficient = 0.42
+rolling_resistance = 0.014
+downforce = 6.0
+brake_torque = 5200.0
+handbrake_torque = 9000.0
+handbrake_grip_loss = 0.62
+brake_bias = 0.62
+tyre_grip = 1.16
+peak_slip_angle = 0.14
+slide_slip_angle = 0.42
+slide_grip_scale = 0.86
+max_steer_angle_deg = 34.0
+steer_speed_deg = 260.0
+speed_steer_reduction = 0.62
+straighten_assist = 1.5
+counter_steer_assist = 0.35
+suspension_rest_length = 0.28
+suspension_travel = 0.22
+suspension_stiffness = 46000.0
+suspension_damping = 3600.0
+anti_roll = 0.35
+velocity_clamp = 90.0
+linear_damping = 0.08
+angular_damping = 1.1
+air_stability = 3.0
+wheel_width = 0.24
+nitro = ExtResource("2_nitro")

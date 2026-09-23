@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="WorldConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/config/world_config.gd" id="1_world"]
+
+[resource]
+script = ExtResource("1_world")
+world_size = 1000.0
+concrete_radius = 500.0
+chunk_size = 125.0
+ground_height = 0.0
+skyline_rings = 2
+block_pitch = 125.0
+road_width = 13.0
+sidewalk_width = 4.0
+kerb_height = 0.15
+lanes_per_direction = 2
+building_margin = 1.5
+min_floors = 2
+max_floors = 14
+floor_height = 3.35
+park_chance = 0.12
+yard_chance = 0.1
+shop_chance = 0.55
+prop_density = 1.0
+lamp_spacing = 26.0
+tree_chance = 0.28
+parked_cars_per_block = 6
+enable_small_props = true
+stream_radius = 560.0
+collision_radius = 300.0
+build_budget_per_frame = 2
+chunk_keep_alive_time = 6.0
+max_resident_chunks = 160
+lod0_distance = 165.0
+lod1_distance = 400.0
+lod2_distance = 900.0
+lod_bias = 1.0
+fog_distance = 760.0
+skyline_distance = 1150.0
+max_traffic_cars = 14
+traffic_radius = 260.0
+traffic_spawn_interval = 1.4

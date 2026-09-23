@@ -1,0 +1,59 @@
+[gd_resource type="Resource" script_class="VehicleConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/config/vehicle_config.gd" id="1_veh"]
+
+[resource]
+script = ExtResource("1_veh")
+mass = 1680.0
+center_of_mass_height = 0.53
+body_size = Vector3(1.94, 0.78, 4.78)
+front_weight_ratio = 0.52
+engine_torque = 700.0
+peak_torque_rpm = 4000.0
+max_rpm = 6600.0
+idle_rpm = 750.0
+final_drive = 3.55
+drive_layout = 2
+awd_front_split = 0.38
+rpm_response = 9.5
+wheel_radius = 0.35
+reverse_torque_scale = 0.55
+reverse_speed_ratio = 0.28
+gear_count = 5
+first_gear_ratio = 3.3
+top_gear_ratio = 0.78
+shift_up_fraction = 0.87
+shift_down_fraction = 0.42
+shift_time = 0.26
+wheel_inertia = 1.9
+peak_slip_ratio = 0.13
+slide_slip_ratio = 0.62
+engine_braking_torque = 58.0
+drivetrain_efficiency = 0.9
+max_speed = 46.46
+drag_coefficient = 0.44
+rolling_resistance = 0.015
+downforce = 6.5
+brake_torque = 5600.0
+handbrake_torque = 9000.0
+handbrake_grip_loss = 0.6
+brake_bias = 0.63
+tyre_grip = 1.2
+peak_slip_angle = 0.14
+slide_slip_angle = 0.42
+slide_grip_scale = 0.87
+max_steer_angle_deg = 33.0
+steer_speed_deg = 270.0
+speed_steer_reduction = 0.6
+straighten_assist = 1.5
+counter_steer_assist = 0.4
+suspension_rest_length = 0.3
+suspension_travel = 0.23
+suspension_stiffness = 50000.0
+suspension_damping = 3900.0
+anti_roll = 0.4
+velocity_clamp = 90.0
+linear_damping = 0.08
+angular_damping = 1.1
+air_stability = 3.4
+wheel_width = 0.26

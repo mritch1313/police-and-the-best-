@@ -42,6 +42,31 @@ class_name VehicleConfig
 ## Reverse speed limit as a fraction of the forward top speed.
 @export_range(0.05, 0.8, 0.01) var reverse_speed_ratio: float = 0.28
 
+@export_group("Gearbox")
+## Number of forward gears of the automatic gearbox.
+@export_range(1, 8, 1) var gear_count: int = 5
+## Total ratio (gearbox * final drive) of the first gear.
+@export_range(1.0, 20.0, 0.1) var first_gear_ratio: float = 3.2
+## Ratio of the top gear.
+@export_range(0.3, 4.0, 0.05) var top_gear_ratio: float = 0.78
+## Engine speed fraction (of `max_rpm`) at which the gearbox shifts up.
+@export_range(0.4, 1.0, 0.01) var shift_up_fraction: float = 0.86
+## Engine speed fraction at which the gearbox shifts down.
+@export_range(0.1, 0.9, 0.01) var shift_down_fraction: float = 0.42
+## Time a gear change takes, in seconds. Torque is cut during the shift.
+@export_range(0.0, 2.0, 0.01) var shift_time: float = 0.28
+## Moment of inertia of one wheel in kg*m^2. Controls how quickly a wheel spins up
+## (wheelspin) or locks (braking).
+@export_range(0.2, 20.0, 0.1) var wheel_inertia: float = 1.7
+## Slip ratio at which the tyre reaches its peak longitudinal force.
+@export_range(0.02, 0.5, 0.01) var peak_slip_ratio: float = 0.13
+## Slip ratio at which the tyre is fully sliding.
+@export_range(0.1, 1.5, 0.01) var slide_slip_ratio: float = 0.62
+## Engine braking torque (N*m at the crank) applied while the throttle is released.
+@export_range(0.0, 300.0, 1.0) var engine_braking_torque: float = 55.0
+## Efficiency of the drivetrain (0..1).
+@export_range(0.5, 1.0, 0.01) var drivetrain_efficiency: float = 0.9
+
 @export_group("Speed envelope")
 ## Hard forward speed cap in metres per second (the arcade "top speed").
 @export_range(5.0, 150.0, 0.5) var max_speed: float = 46.0

@@ -1,0 +1,10 @@
+# Python requirements for the asset generators in this directory.
+#
+#   python3 -m pip install --target /tmp/pylib -r tools/assets/requirements.txt
+#   PYTHONPATH=/tmp/pylib python3 tools/assets/generate_textures.py --out assets
+#
+# Both packages are only needed to *generate* the placeholder art. The game itself has no
+# Python dependency, and the generated PNG files are committed to the repository, so a build
+# machine does not need any of this.
+numpy>=1.24
+Pillow>=10.0

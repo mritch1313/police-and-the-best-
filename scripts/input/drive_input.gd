@@ -44,6 +44,24 @@ func reset() -> void:
 
 
 ## Returns a copy of this snapshot.
+## Copies the state of another snapshot into this one (used by the player car, which reads
+## the merged input manager snapshot into its own frame state).
+func copy_from(other: DriveInput) -> void:
+	if other == null:
+		reset()
+		return
+	steer = other.steer
+	throttle = other.throttle
+	brake = other.brake
+	handbrake = other.handbrake
+	nitro = other.nitro
+	reverse_requested = other.reverse_requested
+	look_delta = other.look_delta
+	zoom_delta = other.zoom_delta
+	camera_reset = other.camera_reset
+	source = other.source
+
+
 func copy() -> DriveInput:
 	var other := DriveInput.new()
 	other.steer = steer
