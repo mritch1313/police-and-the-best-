@@ -1,0 +1,78 @@
+name: Setup Godot
+description: >-
+  Installs Godot 4.7.2 stable (linux x86_64) and, when requested, the matching
+  Android export templates. Everything is cached with cache keys derived from the
+  exact engine version, so a version bump always invalidates the cache.
+
+inputs:
+  godot-version:
+    description: Godot stable version (e.g. 4.7.2)
+    required: false
+    default: "4.7.2"
+  export-templates:
+    description: Also install the export templates (needed for Android builds)
+    required: false
+    default: "false"
+  templates-flavour:
+    description: standard or mono
+    required: false
+    default: "standard"
+
+runs:
+  using: composite
+  steps:
+    - name: Cache Godot editor binary
+      uses: actions/cache@v4
+      with:
+        path: ~/godot-bin
+        key: godot-editor-${{ inputs.godot-version }}-linux-x86_64
+
+    - name: Install Godot ${{ inputs.godot-version }} editor
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$HOME/godot-bin"
+        if [ ! -x "$HOME/godot-bin/godot" ]; then
+          URL="https://github.com/godotengine/godot/releases/download/${{ inputs.godot-version }}-stable/Godot_v${{ inputs.godot-version }}-stable_linux.x86_64.zip"
+          echo "Downloading $URL"
+          curl -fL --retry 3 --retry-delay 5 -o /tmp/godot-editor.zip "$URL"
+          unzip -o -q /tmp/godot-editor.zip -d /tmp/godot-editor
+          mv "/tmp/godot-editor/Godot_v${{ inputs.godot-version }}-stable_linux.x86_64" "$HOME/godot-bin/godot"
+          chmod +x "$HOME/godot-bin/godot"
+          rm -rf /tmp/godot-editor /tmp/godot-editor.zip
+        fi
+        echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+        "$HOME/godot-bin/godot" --version
+
+    - name: Cache Godot export templates
+      if: inputs.export-templates == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ~/.local/share/godot/export_templates
+        key: godot-templates-${{ inputs.godot-version }}-${{ inputs.templates-flavour }}
+
+    - name: Install Godot ${{ inputs.godot-version }} export templates
+      if: inputs.export-templates == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        DEST="$HOME/.local/share/godot/export_templates/${{ inputs.godot-version }}.stable"
+        if [ -f "$DEST/version.txt" ]; then
+          echo "Export templates already installed at $DEST"
+          ls -la "$DEST" | head -20
+          exit 0
+        fi
+        SUFFIX=""
+        if [ "${{ inputs.templates-flavour }}" = "mono" ]; then SUFFIX="_mono"; fi
+        URL="https://github.com/godotengine/godot/releases/download/${{ inputs.godot-version }}-stable/Godot_v${{ inputs.godot-version }}-stable${SUFFIX}_export_templates.tpz"
+        echo "Downloading $URL"
+        curl -fL --retry 3 --retry-delay 5 -o /tmp/templates.tpz "$URL"
+        rm -rf /tmp/templates-extract
+        mkdir -p /tmp/templates-extract
+        unzip -q /tmp/templates.tpz -d /tmp/templates-extract
+        mkdir -p "$HOME/.local/share/godot/export_templates"
+        rm -rf "$DEST"
+        mv /tmp/templates-extract/templates "$DEST"
+        rm -rf /tmp/templates-extract /tmp/templates.tpz
+        echo "Installed templates:"
+        ls -la "$DEST" | head -30

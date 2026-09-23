@@ -1,0 +1,100 @@
+name: Environment Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "arena/**"
+
+jobs:
+  probe:
+    name: Runner capability probe (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Runner facts
+        run: |
+          set -x
+          uname -a
+          nproc
+          free -h
+          df -h /
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
+          ls -la /usr/local/lib/android/sdk 2>/dev/null || echo "no sdk at /usr/local/lib/android/sdk"
+          ls -la /usr/local/lib/android/sdk/build-tools 2>/dev/null || true
+          ls -la /usr/local/lib/android/sdk/platforms 2>/dev/null || true
+          java -version 2>&1 || true
+          ls -la /usr/lib/jvm 2>/dev/null || true
+          which sdkmanager adb apksigner zipalign gradle xvfb-run 2>&1 || true
+          glxinfo -B 2>&1 | head -20 || echo "no glxinfo"
+
+      - name: Setup Godot
+        uses: ./.github/actions/setup-godot
+        with:
+          godot-version: "4.7.2"
+          export-templates: "true"
+
+      - name: Godot version + import pass
+        run: |
+          set -x
+          godot --version
+          ls -la ~/.local/share/godot/export_templates/4.7.2.stable | head -20
+          godot --headless --import --path . 2>&1 | tail -40
+          echo "--- .godot dir ---"
+          ls -la .godot 2>/dev/null | head
+
+      - name: Run main scene headless (probe)
+        run: |
+          set -x
+          timeout 120 godot --headless --path . --quit-after 300 2>&1 | tee /tmp/probe_run.log
+          echo "--- grep PROBE ---"
+          grep "\[PROBE\]" /tmp/probe_run.log || true
+
+      - name: Xvfb + software OpenGL render probe
+        run: |
+          set -x
+          sudo apt-get update -qq || true
+          sudo apt-get install -y -qq xvfb mesa-utils libgl1-mesa-dri || true
+          xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver opengl3 --path . --quit-after 300 2>&1 | tail -40 || echo "xvfb run failed"
+
+      - name: Editor settings + android export probe
+        run: |
+          set -x
+          mkdir -p ~/.config/godot ~/.android
+          timeout 120 godot --headless --editor --quit --path . 2>&1 | tail -20 || true
+          ls -la ~/.config/godot || true
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          JDK=$(dirname $(dirname $(readlink -f $(which javac))))
+          echo "SDK=$SDK JDK=$JDK"
+          keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -keypass android \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -3 || true
+          SETTINGS=~/.config/godot/editor_settings-4.tres
+          if [ ! -f "$SETTINGS" ]; then
+            printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\n' > "$SETTINGS"
+          fi
+          cat >> "$SETTINGS" <<EOF
+export/android/android_sdk_path = "$SDK"
+export/android/java_sdk_path = "$JDK"
+export/android/debug_keystore = "$HOME/.android/debug.keystore"
+export/android/debug_keystore_user = "androiddebugkey"
+export/android/debug_keystore_pass = "android"
+export/android/force_system_user = false
+EOF
+          tail -20 "$SETTINGS"
+          mkdir -p build/android
+          timeout 900 godot --headless --export-release "Android" "build/android/probe.apk" --path . 2>&1 | tail -60 || echo "EXPORT EXIT=$?"
+          ls -la build/android || true
+
+      - name: Always dump logs
+        if: always()
+        run: |
+          echo "=== ~/.config/godot ==="
+          ls -la ~/.config/godot 2>/dev/null || true
+          echo "=== build/android ==="
+          ls -la build/android 2>/dev/null || true

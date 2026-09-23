@@ -1,0 +1,32 @@
+# Godot 4
+.godot/
+/android/
+*.translation
+
+# Build output
+/build/
+/builds/
+/artifacts/
+*.apk
+*.aab
+*.pck
+*.zip
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Python tooling (local validation)
+__pycache__/
+*.pyc
+.venv/
+
+# Local secrets: NEVER commit keystores or passwords
+*.keystore
+*.jks
+!tools/ci/android/debug.keystore.readme
+keystore.properties
+.env
