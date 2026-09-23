@@ -64,10 +64,8 @@ extends ConfigResource
 @export var text_color: Color = Color(0.92, 0.94, 0.97, 1.0)
 @export var dim_text_color: Color = Color(0.62, 0.66, 0.72, 1.0)
 
-
 func map_count() -> int:
 	return maps.size()
-
 
 func map_entry(index: int) -> Dictionary:
 	if index < 0 or index >= maps.size():
@@ -76,7 +74,6 @@ func map_entry(index: int) -> Dictionary:
 	if entry is Dictionary:
 		return entry
 	return {}
-
 
 func validate() -> PackedStringArray:
 	var problems := PackedStringArray()

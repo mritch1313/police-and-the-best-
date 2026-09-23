@@ -18,20 +18,17 @@ extends ConfigResource
 @export_range(0.0, 1.0, 0.01) var fog_density_multiplier: float = 1.0
 @export var glow_enabled: bool = false
 @export_range(0.0, 2.0, 0.05) var glow_intensity: float = 0.25
-@export var half_res_effects: bool = false
 @export_range(0, 8, 1) var anisotropy: int = 0
 @export_range(0, 4, 1) var texture_filter: int = 1
 @export var sky_realtime_update: bool = false
 ## Сколько чанков держать в памяти (верхний предел для бюджета).
 @export_range(1, 64, 1) var max_chunks: int = 9
 
-
 func describe() -> String:
 	return "shadows=%s(%dpx) scale=%.2f lod=%.2f props=%.2f cull=%.2f chunks=%d" % [
 		display_name, shadow_atlas_size if shadows_enabled else 0, rendering_scale,
 		lod_bias, prop_density, cull_distance_multiplier, max_chunks,
 	]
-
 
 func validate() -> PackedStringArray:
 	var problems := PackedStringArray()

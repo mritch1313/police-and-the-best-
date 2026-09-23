@@ -32,6 +32,11 @@ extends ConfigResource
 @export var sidewalk_color: Color = Color(0.52, 0.52, 0.51, 1.0)
 @export var ground_grain: float = 0.14
 ## Уровень «земли» (Y) для спавна машины.
+## Слои физики: чанк (земля+дома) — «World», мягкая/твёрдая мелочь — «Prop».
+## Камера и машины настраивают маски в camera.cfg / vehicle.cfg.
+@export var collision_layer: int = 1
+@export var prop_collision_layer: int = 4
+
 @export var ground_y_m: float = 0.0
 @export var spawn_height_m: float = 0.62
 
@@ -108,10 +113,8 @@ extends ConfigResource
 ## Высота, с которой CI делает скриншот карты сверху (для иконки карты в меню).
 @export_range(60.0, 4000.0, 10.0) var topdown_shot_height_m: float = 780.0
 
-
 func grid_lines_across(radius: float) -> int:
 	return int(floor(radius * 2.0 / block_pitch_m))
-
 
 func is_avenue(index: int) -> bool:
 	if avenue_every < 2:
@@ -119,14 +122,11 @@ func is_avenue(index: int) -> bool:
 	var v := absi(index) % avenue_every
 	return v == 0
 
-
 func road_half_width_for(index: int) -> float:
 	return (avenue_width_m if is_avenue(index) else road_width_m) * 0.5
 
-
 func chunk_span_count() -> int:
 	return int(ceil(world_radius_m * 2.0 / chunk_size_m))
-
 
 func validate() -> PackedStringArray:
 	var problems := PackedStringArray()

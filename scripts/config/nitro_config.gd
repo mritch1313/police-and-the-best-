@@ -25,7 +25,7 @@ extends ConfigResource
 
 @export_group("Physical effect")
 ## Во сколько раз поднимается доступный максимум скорости.
-## Значение подобрано так: player_max * 1.273 == police_max * 1.25 (см. BalanceRules).
+## Подобрано так: player 165 * 1.273 = 210 км/ч при police 166.65 * 1.25 = 208.3 (см. BalanceRules).
 @export_range(1.0, 2.0, 0.001) var max_speed_multiplier: float = 1.273
 ## Во сколько раз растёт доступная тяга привода.
 @export_range(1.0, 3.0, 0.001) var thrust_multiplier: float = 1.62
@@ -39,7 +39,6 @@ extends ConfigResource
 ## Насколько шире становится FOV камеры при бусте (градусы, плавно).
 @export_range(0.0, 25.0, 0.1) var boost_fov_add: float = 7.5
 @export_range(0.0, 4.0, 0.05) var presentation_smoothing: float = 1.4
-
 
 func validate() -> PackedStringArray:
 	var problems := PackedStringArray()

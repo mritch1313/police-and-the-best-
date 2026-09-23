@@ -13,13 +13,11 @@ extends ConfigResource
 @export_range(0.5, 20.0, 0.5) var check_window_s: float = 3.0
 ## Сколько подряд «плохих»/«хороших» замеров нужно для смены уровня.
 @export_range(1, 8, 1) var confirmations: int = 2
-@export var low_battery_safe_mode: bool = true
 @export var vsync: bool = true
 @export_range(0, 4, 1) var initial_tier_for_low_ram: int = 0
 @export var section_for_tier_0: String = "graphics.tier_low"
 @export var section_for_tier_1: String = "graphics.tier_medium"
 @export var section_for_tier_2: String = "graphics.tier_high"
-
 
 func validate() -> PackedStringArray:
 	var problems := PackedStringArray()

@@ -1,0 +1,51 @@
+# («VehcileRig.new()», «BixShape3D.new()») без скачивания 800 xml документации движка.
+# Движковые классы Godot 4.7, которые проект создаёт/вызывает статически.
+# Новый класс Godot в коде = новая строка здесь (осознанный диф, а не «мусорный» файл).
+# Список нужен tools/validate_project.py: он ловит опечатки в именах классов
+ArrayMesh
+ArrayOccluder3D
+BoxMesh
+BoxShape3D
+Button
+CanvasLayer
+CheckBox
+CollisionShape3D
+ColorRect
+ConcavePolygonShape3D
+ConeMesh
+ConfigFile
+Control
+CylinderMesh
+DirectionalLight3D
+Environment
+HBoxContainer
+HSlider
+InputEventScreenDrag
+InputEventScreenTouch
+Label
+MeshInstance3D
+MultiMesh
+MultiMeshInstance3D
+Mutex
+Node
+Node3D
+OccluderInstance3D
+OmniLight3D
+PanelContainer
+PhysicsShapeQueryParameters3D
+PhysicsSphereShape3D
+PrismMesh
+ProceduralSkyMaterial
+ProgressBar
+RandomNumberGenerator
+ResourceLoader
+Sky
+SphereMesh
+StandardMaterial3D
+StaticBody3D
+StyleBoxEmpty
+StyleBoxFlat
+Theme
+TorusMesh
+VBoxContainer
+WorldEnvironment

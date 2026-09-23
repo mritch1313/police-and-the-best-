@@ -29,7 +29,7 @@ extends ConfigResource
 @export_group("Spawning")
 ## Кольцо спавна патрулей вокруг игрока (м).
 @export_range(40.0, 900.0, 5.0) var spawn_radius_m: float = 165.0
-## Дальше этого патруль десpawnится (м).
+## Дальше этого патруль выгружается (м).
 @export_range(120.0, 2000.0, 10.0) var despawn_radius_m: float = 470.0
 ## Пауза между попытками доспавна до нужного количества (сек).
 @export_range(0.1, 30.0, 0.1) var spawn_interval_s: float = 1.6
@@ -42,11 +42,12 @@ extends ConfigResource
 ## Включать ли вообще полицию (для «просто покататься» из меню настроек).
 @export var police_enabled: bool = true
 
-
 func validate() -> PackedStringArray:
 	var problems := PackedStringArray()
 	if despawn_radius_m <= spawn_radius_m * 1.4:
-		problems.append(_problem("despawn_radius_m (%.0f) должен заметно превышать spawn_radius_m (%.0f), иначе патрули будут мигать" % [despawn_radius_m, spawn_radius_m]))
+		problems.append(_problem(
+			"despawn_radius_m (%.0f) должен заметно превышать spawn_radius_m (%.0f), иначе патрули будут мигать"
+			% [despawn_radius_m, spawn_radius_m]))
 	if arrest_distance_m < 1.0:
 		problems.append(_problem("arrest_distance_m слишком мал — задержание невозможно поймать"))
 	if arrest_max_speed_kmh <= 0.0 and arrest_hold_s > 0.5:

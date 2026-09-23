@@ -47,14 +47,12 @@ extends ConfigResource
 ## Сколько секунд блок-пост живёт, если игрок рядом так и не оказался.
 @export_range(2.0, 120.0, 1.0) var roadblock_lifetime_s: float = 26.0
 
-
 func units_for_wanted(level: int) -> int:
 	if level < 1:
 		return 0
 	if level - 1 < units_per_wanted_level.size():
 		return int(units_per_wanted_level[level - 1])
 	return int(units_per_wanted_level[units_per_wanted_level.size() - 1])
-
 
 func validate() -> PackedStringArray:
 	var problems := PackedStringArray()
@@ -65,7 +63,8 @@ func validate() -> PackedStringArray:
 	if units_per_wanted_level.is_empty():
 		problems.append(_problem("units_per_wanted_level пуст"))
 	if units_for_wanted(units_per_wanted_level.size()) > max_units:
-		problems.append(_problem("уровень розыска требует %d машин, а max_units=%d" % [units_for_wanted(units_per_wanted_level.size()), max_units]))
+		problems.append(_problem("уровень розыска требует %d машин, а max_units=%d" % [units_for_wanted(units_per_wanted_level.size()),
+			max_units]))
 	if repath_interval_s <= 0.0:
 		problems.append(_problem("repath_interval_s = 0: ИИ будет перестраивать маршрут каждый кадр"))
 	return problems

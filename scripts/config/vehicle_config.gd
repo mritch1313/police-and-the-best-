@@ -20,7 +20,9 @@ extends ConfigResource
 @export_range(0.0, 1.2, 0.01) var center_of_mass_drop_m: float = 0.34
 @export_range(1.6, 4.2, 0.01) var wheelbase_m: float = 2.74
 @export_range(1.1, 2.4, 0.01) var track_width_m: float = 1.6
-@export_range(0.12, 0.6, 0.01) var ride_height_m: float = 0.3
+## Высота ступицы колеса над дорогой в покое = «длина стойки» (м).
+## Начало координат кузова совпадает с плоскостью ступиц: земля в покое на y = -ride_height_m.
+@export_range(0.1, 1.2, 0.01) var ride_height_m: float = 0.36
 @export_range(0.25, 0.65, 0.005) var wheel_radius_m: float = 0.33
 @export_range(0.1, 0.5, 0.01) var wheel_width_m: float = 0.24
 
@@ -38,7 +40,7 @@ extends ConfigResource
 @export_range(0.0, 0.6, 0.01) var shift_time_s: float = 0.14
 
 @export_group("Speed limits")
-## Максимальная скорость без нитро (км/ч). Полиция по замыслу чуть быстрее — см. PoliceConfig.
+## Максимальная скорость без нитро (км/ч). Полиция по замыслу чуть быстрее (см. BalanceRules).
 @export_range(40.0, 400.0, 1.0, "or_greater") var max_speed_kmh: float = 165.0
 ## Скорость, ниже которой тяга почти не зависит от скорости (полка момента).
 @export_range(5.0, 300.0, 1.0) var throttle_ref_speed_kmh: float = 96.0
@@ -83,6 +85,37 @@ extends ConfigResource
 @export_range(0.0, 120000.0, 500.0) var anti_roll_rear_n: float = 18000.0
 ## Жёсткость стабилизатора на метр хода подвески (Н/м).
 @export_range(0.0, 1.0, 0.01) var bump_damping_extra: float = 0.18
+## Потолок силы упругости на одно колесо (Н) — защита от «выстрела» при жёстком приземлении.
+@export_range(1000.0, 400000.0, 500.0) var suspension_max_force_n: float = 95000.0
+
+@export_group("Chassis behaviour")
+## Демпфирование рыскания: доля инерции кузова, гасимая в секунду (0 = «катание на лыжах»).
+@export_range(0.0, 4.0, 0.01) var yaw_damping: float = 0.85
+## Момент управления в прыжке (Н·м), когда ни одно колесо не касается земли.
+@export_range(0.0, 20000.0, 50.0) var air_control_torque_n: float = 2600.0
+## Эффективная масса одного колеса (кг) — инерция вращения шины/тормозного диска.
+@export_range(4.0, 120.0, 0.5) var wheel_inertia_kg: float = 21.0
+## Доля сцепления при полностью заблокированном колесе (меньше = юзом скользит).
+@export_range(0.2, 1.0, 0.01) var wheel_lock_grip_factor: float = 0.72
+## Сила, удерживающая машину от сползания на уклоне при нулевом газе (Н на колесо).
+@export_range(0.0, 8000.0, 25.0) var hold_force_n: float = 1600.0
+
+@export_group("Proportions (visual)")
+## Кузов: клиренс до «порога», высота до линии окон, высота рубки (м).
+## Нужно только визуальной модели и коллизии — физике важна масса и база.
+@export_range(0.02, 0.6, 0.01) var floor_clearance_m: float = 0.16
+@export_range(0.3, 1.4, 0.01) var body_height_m: float = 0.72
+@export_range(0.2, 1.2, 0.01) var cabin_height_m: float = 0.5
+## Длина кузова от бампера до бампера (м). Обычно wheelbase + свесы.
+@export_range(2.6, 6.4, 0.01) var body_length_m: float = 4.42
+## Ширина кузова по зеркалам/двери (м). Обычно track + ~0.3.
+@export_range(1.3, 2.8, 0.01) var body_width_m: float = 1.9
+## Где начинается лобовое стекло (доля длины от переднего свеса, 0..1).
+@export_range(0.25, 0.8, 0.01) var windshield_start_ratio: float = 0.56
+## Где заканчивается задняя стойка (доля длины, 0..1).
+@export_range(0.55, 0.98, 0.01) var cabin_end_ratio: float = 0.82
+## Тип кузова для визуальной модели: 0 седан, 1 купе, 2 универсал/кроссовер, 3 «перехватчик» ППС.
+@export_range(0, 3, 1) var body_style: int = 0
 
 @export_group("Collision")
 ## 1=World, 2=PlayerCar, 3=PoliceCar, 4=Prop, 5=Trigger (см. layer_names в project.godot).
@@ -90,7 +123,6 @@ extends ConfigResource
 @export_range(1, 1023, 1) var collision_mask: int = 29  # 1|4|8|16: World|Prop|Trigger
 ## Маска лучей подвески (по умолчанию только мир + реквизит).
 @export_range(1, 1023, 1) var wheel_ray_mask: int = 21  # 1|4|16: World|Prop|Trigger
-
 
 ## Перекрёстные проверки связности — конфиг может быть синтаксически валидным,
 ## но физически бессмысленным. Проблемы видны в DebugConsole и валят CI-тест конфигурации.
@@ -106,8 +138,15 @@ func validate() -> PackedStringArray:
 		problems.append(_problem("тяга %.0f Н на %.0f кг: машина не сможет разогнаться" % [engine_force_n, mass_kg]))
 	if min_steer_deg > max_steer_deg:
 		problems.append(_problem("min_steer_deg (%.1f) больше max_steer_deg (%.1f)" % [min_steer_deg, max_steer_deg]))
-	if ride_height_m < wheel_radius_m * 0.45:
-		problems.append(_problem("ride_height_m=%.2f: кузов упрётся в асфальт (радиус колеса %.2f)" % [ride_height_m, wheel_radius_m]))
+	if ride_height_m < wheel_radius_m * 0.6:
+		problems.append(_problem("ride_height_m=%.2f: ступица ниже 0.6 радиуса — кузов упрётся в дорогу" % ride_height_m))
+	if body_length_m <= wheelbase_m:
+		problems.append(_problem("body_length_m (%.2f) не больше колёсной базы (%.2f)" % [body_length_m, wheelbase_m]))
+	if body_width_m <= track_width_m:
+		problems.append(_problem("body_width_m (%.2f) не больше колеи (%.2f)" % [body_width_m, track_width_m]))
+	if floor_clearance_m >= ride_height_m:
+		problems.append(_problem("floor_clearance_m (%.2f) >= ride_height_m (%.2f): «пол» кузова под дорогой" % [floor_clearance_m,
+			ride_height_m]))
 	if suspension_travel_m <= 0.01 or longitudinal_stiffness_n <= 0.0 or corner_stiffness_n_per_rad <= 0.0:
 		problems.append(_problem("подвеска/шины не могут иметь нулевую жёсткость"))
 	if gear_ratios.is_empty():
@@ -118,33 +157,27 @@ func validate() -> PackedStringArray:
 		problems.append(_problem("collision_mask=0: машина не увидит дорогу"))
 	return problems
 
-
 ## Максимальная скорость в м/с (используется физикой, полицией и тестами).
 func max_speed_kms() -> float:
 	return max_speed_kmh / 3.6
 
-
 func nitro_speed_kms(nitro_multiplier: float) -> float:
 	return max_speed_kms() * nitro_multiplier
-
 
 ## Удельная тяга (Н на кг) — convenient scalar for AI comparisons.
 func power_to_weight() -> float:
 	return engine_force_n / maxf(mass_kg, 1.0)
-
 
 ## Жёсткость пружины одного колеса (Н/м) из частоты и массы угла кузова.
 func spring_rate_n_per_m() -> float:
 	var corner_mass := mass_kg / 4.0
 	return corner_mass * pow(TAU * suspension_frequency_hz, 2.0)
 
-
 ## Демпфирование одного колеса (Н·с/м) из коэффициента демпфирования.
 func damper_rate_n_s_per_m() -> float:
 	var corner_mass := mass_kg / 4.0
 	var k := spring_rate_n_per_m()
 	return 2.0 * damper_ratio * sqrtf(maxf(k * corner_mass, 0.0001))
-
 
 ## Тормозной момент на колесо (Н·м).
 func brake_torque_nm(per_handbrake: bool = false) -> float:

@@ -14,7 +14,6 @@ static var nitro_vs_police_ratio: float = 1.25
 static var police_tolerance: float = 0.03
 static var nitro_tolerance: float = 0.06
 
-
 static func check(player: VehicleConfig, police: VehicleConfig, nitro: NitroConfig) -> PackedStringArray:
 	var problems := PackedStringArray()
 	if player == null or police == null or nitro == null:
@@ -33,7 +32,6 @@ static func check(player: VehicleConfig, police: VehicleConfig, nitro: NitroConf
 			player_with_nitro, expected_nitro, nitro_vs_police_ratio, nitro_tolerance * 100.0,
 		])
 	return problems
-
 
 static func describe(player: VehicleConfig, police: VehicleConfig, nitro: NitroConfig) -> String:
 	if player == null or police == null or nitro == null:

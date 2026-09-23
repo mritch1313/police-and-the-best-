@@ -1,0 +1,351 @@
+name: CI
+
+# ---------------------------------------------------------------------------
+# Три джобы, от дешёвой к дорогой. Смысл разделения: сломанный .cfg или опечатка
+# в имени класса движка должны быть видны за ~40 секунд, а не через 12 минут сборки
+# APK. Поэтому FAST VALIDATION не трогает Godot вообще, HEADLESS TESTS не экспортирует,
+# ANDROID BUILD запускается только когда первые две зелёные (needs:).
+#
+# Все джобы: ubuntu-latest (требование проекта: не ubuntu-slim — на slim нет нужных
+# компонентов Android SDK/Xvfb).
+# ---------------------------------------------------------------------------
+
+on:
+  push:
+    branches: [main, "arena/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7.2"
+  GODOT_CHANNEL: stable
+  GODOT_ZIP: Godot_v4.7.2-stable_linux.x86_64.zip
+  TEMPLATES_TPK: Godot_v4.7.2-stable_export_templates.tpz
+  RELEASE_URL: https://github.com/godotengine/godot/releases/download/4.7.2-stable
+  GDTOOLKIT_VERSION: "4.5.0"
+  APK_PATH: build/android/police-chase-arm64.apk
+
+jobs:
+  fast-validation:
+    name: FAST VALIDATION
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/requirements-lint.txt
+
+      - name: Install lint toolchain (gdtoolkit)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r tools/requirements-lint.txt
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          gdlint --version || true
+
+      - name: gdparse — синтаксис каждого скрипта
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r file; do
+            if ! gdparse "$file" >/dev/null 2>&1; then
+              echo "::error file=$file::gdparse не смог разобрать файл"
+              gdparse "$file" || true
+              fail=1
+            fi
+          done < <(find scripts tests -name '*.gd' | sort)
+          exit $fail
+
+      - name: gdlint — стиль и грубые ошибки
+        run: gdlint scripts tests
+
+      - name: Структура проекта, сцены, ссылки, конфиги
+        run: python3 tools/validate_project.py
+
+      - name: Паритет autoloads/*.cfg и классов конфигов
+        run: python3 tools/check_cfg_parity.py
+
+      - name: Имена API Godot (по документации движка; SKIP без неё)
+        run: |
+          set -uo pipefail
+          DOCS="$RUNNER_TEMP/godot-docs"
+          if [ ! -d "$DOCS/doc/classes" ]; then
+            rm -rf "$DOCS"
+            # --branch <tag> + blob:none + sparse: тянем ТОЛЬКО doc/classes нужного тега.
+            # Без пина по тегу получили бы проверку по доке 4.8-dev и красные ложные FAIL.
+            git clone --quiet --filter=blob:none --sparse --single-branch --branch \
+              "v${GODOT_VERSION}-${GODOT_CHANNEL}" "https://github.com/godotengine/godot.git" "$DOCS" \
+              >/dev/null 2>&1 || true
+            if [ -d "$DOCS/.git" ]; then
+              git -C "$DOCS" sparse-checkout set doc/classes >/dev/null 2>&1 || true
+            fi
+          fi
+          if [ -d "$DOCS/doc/classes" ]; then
+            python3 tools/api_check.py "$DOCS" tools/api_surface.txt
+          else
+            echo "::warning::doc/classes недоступна (сеть?) — проверка имён API ПРОПУЩЕНА, а не пройдена"
+            echo "API CHECK: SKIP (нет документации движка)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Нет ошибок в .cfg (табы, битые литералы)
+        run: |
+          set -euo pipefail
+          if grep -rnP "\t" autoloads/*.cfg; then
+            echo "::error::в .cfg найдены табы — используйте пробелы"; exit 1
+          fi
+          for file in autoloads/*.cfg; do
+            if grep -nE "=[[:space:]]*$" "$file"; then
+              echo "::error file=$file::ключ без значения"; exit 1
+            fi
+          done
+
+  headless-tests:
+    name: HEADLESS TESTS
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Кэш движка и шаблонов экспорта
+        uses: actions/cache@v4
+        id: godot-cache
+        with:
+          path: |
+            ~/.cache/godot-ci
+            ~/godot-templates
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_CHANNEL }}-templates-v2
+
+      - name: Скачать Godot и шаблоны экспорта
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.cache/godot-ci ~/godot-templates
+          if [ ! -f ~/.cache/godot-ci/godot ]; then
+            curl -fL --retry 3 -o /tmp/godot.zip "${{ env.RELEASE_URL }}/${{ env.GODOT_ZIP }}"
+            rm -rf /tmp/godot-unpacked
+            unzip -o -q /tmp/godot.zip -d /tmp/godot-unpacked
+            # Внутри архива бинарник называется без .zip: Godot_v4.7.2-stable_linux.x86_64
+            BIN=$(find /tmp/godot-unpacked -maxdepth 1 -type f | head -n 1)
+            test -n "$BIN"
+            mv "$BIN" ~/.cache/godot-ci/godot
+            chmod +x ~/.cache/godot-ci/godot
+          fi
+          if [ ! -d ~/godot-templates/4.7.2.stable ]; then
+            curl -fL --retry 3 -o /tmp/templates.tpz "${{ env.RELEASE_URL }}/${{ env.TEMPLATES_TPK }}"
+            rm -rf /tmp/templates
+            unzip -o -q /tmp/templates.tpz -d /tmp/templates
+            mkdir -p ~/godot-templates/4.7.2.stable
+            mv /tmp/templates/templates/* ~/godot-templates/4.7.2.stable/
+          fi
+          mkdir -p ~/.local/share/godot/export_templates
+          ln -sfn ~/godot-templates/4.7.2.stable ~/.local/share/godot/export_templates/4.7.2.stable
+          echo "$HOME/.cache/godot-ci" >> "$GITHUB_PATH"
+          ~/.cache/godot-ci/godot --version
+
+      - name: Импортировать ресурсы (нужен .godot/, чтобы экспорт не молчал)
+        run: |
+          set -euo pipefail
+          timeout 900 ~/.cache/godot-ci/godot --headless --path . --import || true
+          ls -la .godot >/dev/null
+
+      - name: Автотесты (headless)
+        run: |
+          set -euo pipefail
+          mkdir -p ci-reports
+          timeout 900 ~/.cache/godot-ci/godot --headless --path . res://tests/run_tests.tscn \
+            2>&1 | tee ci-reports/tests.txt
+          if grep -qE "SCRIPT ERROR|Failed loading resource|Cannot open file" ci-reports/tests.txt; then
+            echo "::error::в выводе тестов есть ошибки движка (SCRIPT ERROR / не загрузившийся ресурс)"
+            grep -nE "SCRIPT ERROR|Failed loading resource|Cannot open file" ci-reports/tests.txt | head -20
+            exit 1
+          fi
+
+      - name: Скриншот собранного мира (он же — картинка карты в меню)
+        run: |
+          set -euo pipefail
+          mkdir -p ci-reports/screenshots assets/ui
+          # XVFB + llvmpipe: рендер без GPU. Это НЕ проверка на телефоне, а доказательство,
+          # что сцена собирается в кадр без ошибок шейдеров/ресурсов.
+          timeout 900 xvfb-run -a -s "-screen 0 720x1280x24" \
+            ~/.cache/godot-ci/godot --path . res://scenes/game/Game.tscn \
+            -- --capture-map --capture-out=res://assets/ui/map_card.png \
+            2>&1 | tee ci-reports/screenshots/capture.log
+          if grep -qE "SCRIPT ERROR|ERROR: Failed" ci-reports/screenshots/capture.log; then
+            echo "::error::при съёмке кадра движок сообщил об ошибках"
+            exit 1
+          fi
+          test -s assets/ui/map_card.png
+
+      - name: Отчёт окружения сборки
+        if: always()
+        run: |
+          set -uo pipefail
+          {
+            echo "## Итог HEADLESS TESTS"
+            echo '```'
+            tail -n 40 ci-reports/tests.txt 2>/dev/null || echo "нет ci-reports/tests.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: godot-test-reports
+          path: ci-reports
+          if-no-files-found: warn
+
+      # Кадр мира коммитится обратно в ветку: меню обязано показывать РЕАЛЬНЫЙ скриншот
+      # собранной карты, а не нарисованную заглушку. [skip ci] — чтобы не зациклить CI.
+      - name: Закоммитить assets/ui/map_card.png (если изменился)
+        if: github.event_name == 'push' && github.ref_name != 'main'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain assets/ui/map_card.png)" ]; then
+            git add assets/ui/map_card.png
+            git commit -m "assets: скриншот карты из CI-сборки [skip ci]"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          else
+            echo "map_card.png не изменился — коммита нет"
+          fi
+
+  android-build:
+    name: ANDROID BUILD
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: [fast-validation, headless-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Кэш движка и шаблонов экспорта
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/godot-ci
+            ~/godot-templates
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_CHANNEL }}-templates-v2
+
+      - name: Подготовить Godot и шаблоны (если кэш пуст - скачать)
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.cache/godot-ci ~/godot-templates
+          if [ ! -f ~/.cache/godot-ci/godot ]; then
+            curl -fL --retry 3 -o /tmp/godot.zip "${{ env.RELEASE_URL }}/${{ env.GODOT_ZIP }}"
+            rm -rf /tmp/godot-unpacked
+            unzip -o -q /tmp/godot.zip -d /tmp/godot-unpacked
+            # Внутри архива бинарник называется без .zip: Godot_v4.7.2-stable_linux.x86_64
+            BIN=$(find /tmp/godot-unpacked -maxdepth 1 -type f | head -n 1)
+            test -n "$BIN"
+            mv "$BIN" ~/.cache/godot-ci/godot
+            chmod +x ~/.cache/godot-ci/godot
+          fi
+          if [ ! -d ~/godot-templates/4.7.2.stable ]; then
+            curl -fL --retry 3 -o /tmp/templates.tpz "${{ env.RELEASE_URL }}/${{ env.TEMPLATES_TPK }}"
+            rm -rf /tmp/templates
+            unzip -o -q /tmp/templates.tpz -d /tmp/templates
+            mkdir -p ~/godot-templates/4.7.2.stable
+            mv /tmp/templates/templates/* ~/godot-templates/4.7.2.stable/
+          fi
+          mkdir -p ~/.local/share/godot/export_templates
+          ln -sfn ~/godot-templates/4.7.2.stable ~/.local/share/godot/export_templates/4.7.2.stable
+          ls -la ~/godot-templates/4.7.2.stable | grep -E "android_(debug|release).apk"
+
+      # Для debug-экспорта Godot берёт keystore из EditorSettings (по умолчанию
+      # <data_dir>/keystores/debug.keystore) ЛИБО из переменных окружения
+      # GODOT_ANDROID_KEYSTORE_DEBUG_{PATH,USER,PASSWORD} (см. platform/android/export/
+      # export_plugin.h). Делаем и то, и другое: в headless-экспорте NOTIFICATION_EDITOR_SETTINGS_
+      # CHANGED не срабатывает, поэтому автосоздания keystore движком ждать не от чего.
+      - name: Debug-keystore (подпись отладочного APK)
+        run: |
+          set -euo pipefail
+          KS="$HOME/.local/share/godot/keystores/debug.keystore"
+          mkdir -p "$(dirname "$KS")"
+          if [ ! -f "$KS" ]; then
+            keytool -genkeypair -v \
+              -keystore "$KS" \
+              -storepass android -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US" >/dev/null
+          fi
+          test -s "$KS"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$KS" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
+
+      - name: Импорт ресурсов
+        run: |
+          set -euo pipefail
+          timeout 900 ~/.cache/godot-ci/godot --headless --path . --import || true
+
+      - name: Экспорт APK (arm64-v8a)
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "${APK_PATH}")" ci-reports
+          timeout 1500 ~/.cache/godot-ci/godot --headless --path . \
+            --export-debug "Android" "${APK_PATH}" 2>&1 | tee ci-reports/android-export.log
+          test -s "${APK_PATH}"
+
+      - name: Проверить APK (размер, содержимое, arm64)
+        run: |
+          set -euo pipefail
+          mkdir -p ci-reports
+          size=$(stat -c %s "${APK_PATH}")
+          echo "APK: ${APK_PATH}, ${size} байт"
+          if [ "${size}" -lt 8000000 ]; then
+            echo "::error::APK подозрительно маленький (${size} байт) — похоже, ресурсы не упакованы"
+            exit 1
+          fi
+          unzip -l "${APK_PATH}" | tee ci-reports/apk-contents.txt
+          for needed in AndroidManifest.xml resources.arsc classes.dex; do
+            if ! unzip -l "${APK_PATH}" | grep -q "$needed"; then
+              echo "::error::в APK нет $needed"; exit 1
+            fi
+          done
+          if ! unzip -l "${APK_PATH}" | grep -q "lib/arm64-v8a/libgodot_android.so"; then
+            echo "::error::в APK нет arm64-v8a библиотеки"
+            exit 1
+          fi
+          ~/.cache/godot-ci/godot --version | tee ci-reports/godot-version.txt
+          if command -v apksigner >/dev/null 2>&1; then
+            apksigner verify --print-certs "${APK_PATH}" > ci-reports/apksigner.txt 2>&1 || \
+              "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "${APK_PATH}" > ci-reports/apksigner.txt 2>&1 || true
+          fi
+          {
+            echo "## APK собран"
+            echo ""
+            echo "- файл: \`${APK_PATH}\`"
+            echo "- размер: $((size / 1024 / 1024)) МиБ"
+            echo "- ABI: arm64-v8a"
+            echo "- пакет: com.racing.chase"
+            echo ""
+            echo "Запуск на Infinix HOT 40i в CI НЕ выполнялся (физического устройства нет)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: police-chase-android-arm64-apk
+          path: ${{ env.APK_PATH }}
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-build-logs
+          path: ci-reports
+          if-no-files-found: warn

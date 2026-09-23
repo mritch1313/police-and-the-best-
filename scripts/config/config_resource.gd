@@ -13,7 +13,6 @@ extends Resource
 
 var _validated: bool = false
 
-
 ## Залить значения из секции (или из переданной секции `override_section`).
 func bind(section: String = "", override_section: String = "") -> void:
 	config_section = section if not section.is_empty() else config_section
@@ -21,19 +20,15 @@ func bind(section: String = "", override_section: String = "") -> void:
 	if Engine.has_singleton("Config"):
 		Config.apply_to_object(self, target)
 
-
 ## Проверка связности. Возвращает список проблем (пусто = всё хорошо).
 func validate() -> PackedStringArray:
 	return PackedStringArray()
 
-
 func mark_valid() -> void:
 	_validated = true
 
-
 func is_validated() -> bool:
 	return _validated
-
 
 ## Ключи, которые должны присутствовать в секции — для CI-проверки полноты конфига.
 func required_keys() -> PackedStringArray:
@@ -42,7 +37,6 @@ func required_keys() -> PackedStringArray:
 		if info.usage & PROPERTY_USAGE_STORAGE and info.name != "config_section":
 			out.append(info.name)
 	return out
-
 
 func _problem(text: String) -> String:
 	return "[%s] %s" % [config_section, text]

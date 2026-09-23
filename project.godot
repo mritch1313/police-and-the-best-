@@ -20,7 +20,7 @@ config_version=5
 config/name="Police Chase: Open World"
 config/description="Симулятор угона от мусоров: открытый мир, процедурный город, дрифт, нитро. Сборка под портретный Android."
 config/version="4.0.9 TEXT"
-run/main_scene="res://scenes/menu/MainMenu.tscn"
+run/main_scene="res://scenes/menu/OrientationGate.tscn"
 config/features=PackedStringArray("4.7", "GLES 3.1")
 config/icon="res://icon.svg"
 boot_splash/bg_color=Color(0.043, 0.055, 0.078, 1)
@@ -31,6 +31,7 @@ boot_splash/use_filter=false
 [autoload]
 
 Config="*res://scripts/core/config.gd"
+GameSetup="*res://scripts/core/game_setup.gd"
 AppState="*res://scripts/core/app_state.gd"
 SaveManager="*res://scripts/core/save_manager.gd"
 Settings="*res://scripts/core/settings_manager.gd"

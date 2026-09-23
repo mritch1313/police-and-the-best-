@@ -18,3 +18,7 @@ Thumbs.db
 
 # CI scratch
 .cgodot-cache/
+
+# Python tooling
+__pycache__/
+*.pyc

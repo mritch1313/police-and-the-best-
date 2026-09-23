@@ -37,6 +37,12 @@ extends ConfigResource
 @export_range(0.0, 120.0, 0.5) var yaw_align_speed_kmh: float = 14.0
 @export_range(0.0, 120.0, 0.5) var yaw_align_fade_kmh: float = 6.0
 
+## Насколько «разъезжается» кадр и расширяется FOV на максимальной скорости.
+@export_range(0.0, 8.0, 0.1) var distance_speed_gain_m: float = 1.6
+@export_range(0.0, 30.0, 0.5) var fov_speed_gain_deg: float = 6.0
+## Насколько точка взгляда уходит вперёд по направлению камеры на скорости (доли offset).
+@export_range(0.0, 3.0, 0.05) var pivot_lead_gain: float = 0.55
+
 @export_group("Collision avoidance")
 ## Радиус защитного сфер-теста вокруг камеры (м).
 @export_range(0.1, 4.0, 0.05) var collision_radius_m: float = 0.42
@@ -48,6 +54,8 @@ extends ConfigResource
 @export_range(0, 6, 1) var collision_probe_count: int = 2
 ## Смещение лучей вверх (м) — чтобы не прятаться за низкими бордюрами.
 @export_range(0.0, 2.0, 0.05) var collision_probe_lift_m: float = 0.35
+## Слои, которых камера должна избегать (1=мир, 4=пропы). 0 = «все».
+@export var collision_mask: int = 5
 
 @export_group("Effects")
 ## Тряска от скорости/ударов (0 = выключено).
@@ -56,25 +64,22 @@ extends ConfigResource
 ## Скорость, на которой появляется лёгкое «дыхание» камеры (км/ч).
 @export_range(20.0, 400.0, 5.0) var shake_speed_kmh: float = 120.0
 
-
 func desired_distance(for_landscape: bool) -> float:
 	return landscape_distance_m if for_landscape else portrait_distance_m
-
 
 func desired_height(for_landscape: bool) -> float:
 	return landscape_height_m if for_landscape else portrait_height_m
 
-
 func desired_fov(for_landscape: bool) -> float:
 	return landscape_fov_deg if for_landscape else portrait_fov_deg
-
 
 func validate() -> PackedStringArray:
 	var problems := PackedStringArray()
 	if distance_min_m >= distance_max_m:
 		problems.append(_problem("distance_min_m >= distance_max_m"))
 	if distance_min_m > portrait_distance_m or portrait_distance_m > distance_max_m:
-		problems.append(_problem("portrait_distance_m (%.1f) вне диапазона настроек [%.1f..%.1f]" % [portrait_distance_m, distance_min_m, distance_max_m]))
+		problems.append(_problem("portrait_distance_m (%.1f) вне диапазона настроек [%.1f..%.1f]" % [portrait_distance_m, distance_min_m,
+			distance_max_m]))
 	if landscape_distance_m < distance_min_m or landscape_distance_m > distance_max_m:
 		problems.append(_problem("landscape_distance_m (%.1f) вне диапазона настроек" % landscape_distance_m))
 	if pitch_min_deg >= pitch_max_deg:
